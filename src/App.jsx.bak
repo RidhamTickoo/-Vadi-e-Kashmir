@@ -1,0 +1,1010 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  ShoppingBag, 
+  Menu, 
+  X, 
+  Search, 
+  Star, 
+  ChevronRight, 
+  MapPin, 
+  Instagram, 
+  Facebook, 
+  Twitter, 
+  CreditCard, 
+  CheckCircle,
+  ShieldCheck,
+  Truck,
+  Award,
+  Phone,
+  Mail,
+  Package,
+  FileText,
+  Lock,
+  AlertCircle
+} from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
+
+// --- CONFIGURATION ---
+// Safer access to host-injected globals via `window` to avoid ESLint no-undef issues.
+const getFirebaseConfig = () => {
+  try {
+    const raw = (typeof window !== 'undefined' && window.__firebase_config) ? window.__firebase_config : undefined;
+    if (typeof raw !== 'undefined' && raw !== null && raw !== '') {
+      // raw may be a JSON string or an object; try both
+      if (typeof raw === 'string') {
+        try {
+          return JSON.parse(raw);
+        } catch (e) {
+          // if parsing fails, assume it's already a plain string config (unlikely) -> return empty object
+          console.error("Error parsing window.__firebase_config:", e);
+          return {};
+        }
+      } else if (typeof raw === 'object') {
+        return raw;
+      }
+    }
+  } catch (e) {
+    console.error("Error reading window.__firebase_config:", e);
+  }
+  return {}; // Fallback for environments without the global config
+};
+
+const getAuthToken = () => {
+  try {
+    return (typeof window !== 'undefined' && window.__initial_auth_token) ? window.__initial_auth_token : null;
+  } catch (e) {
+    return null;
+  }
+};
+
+const getAppId = () => {
+  try {
+    return (typeof window !== 'undefined' && window.__app_id) ? window.__app_id : 'default-vadiekashmir-app';
+  } catch (e) {
+    return 'default-vadiekashmir-app';
+  }
+};
+
+const RAZORPAY_KEY_ID = "rzp_test_YOUR_KEY_HERE"; 
+
+let app, db, auth;
+
+// --- MOCK DATA ---
+const PRODUCTS = [
+  {
+    id: 1,
+    name: "Royal Pashmina Shawl",
+    category: "Textiles",
+    price: 12500,
+    rating: 5.0,
+    reviews: 128,
+    image: "https://images.unsplash.com/photo-1606293926075-69a00dbfde81?auto=format&fit=crop&q=80&w=800",
+    description: "Hand-spun authentic Changthangi wool, woven by master artisans in Srinagar. Verified GI Tag."
+  },
+  {
+    id: 2,
+    name: "Pampore Mogra Saffron (5g)",
+    category: "Spices",
+    price: 1850,
+    rating: 4.9,
+    reviews: 342,
+    image: "https://images.unsplash.com/photo-1615485500704-3e995f827d51?auto=format&fit=crop&q=80&w=800",
+    description: "The world's finest saffron. Deep crimson threads with potent aroma, harvested in late autumn."
+  },
+  {
+    id: 3,
+    name: "Authentic Kalari Cheese",
+    category: "Food",
+    price: 850,
+    rating: 4.8,
+    reviews: 89,
+    image: "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&q=80&w=800",
+    description: "The 'Mozzarella of Kashmir'. Traditional ripened cheese from the hills of Udhampur."
+  },
+  {
+    id: 4,
+    name: "Kagzi Walnuts (1kg)",
+    category: "Dry Fruits",
+    price: 1200,
+    rating: 4.7,
+    reviews: 210,
+    image: "https://images.unsplash.com/photo-1596309480526-f8c2459066c1?auto=format&fit=crop&q=80&w=800",
+    description: "Premium soft-shell walnuts rich in Omega-3. Sourced directly from Kupwara orchards."
+  },
+  {
+    id: 5,
+    name: "Papier-Mâché Box",
+    category: "Art",
+    price: 3500,
+    rating: 4.6,
+    reviews: 56,
+    image: "https://images.unsplash.com/photo-1685598426340-c21770271692?auto=format&fit=crop&q=80&w=800",
+    description: "Intricate floral hand-painting (Naqashi) on paper pulp. A timeless piece of Kashmiri heritage."
+  },
+  {
+    id: 6,
+    name: "Kashmiri Kahwa Tea Mix",
+    category: "Beverages",
+    price: 650,
+    rating: 4.8,
+    reviews: 450,
+    image: "https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&q=80&w=800",
+    description: "Aromatic green tea blended with saffron, cardamom, and cinnamon. The taste of warmth."
+  },
+  {
+    id: 7,
+    name: "Mamra Almonds (500g)",
+    category: "Dry Fruits",
+    price: 1600,
+    rating: 4.9,
+    reviews: 112,
+    image: "https://images.unsplash.com/photo-1508061253366-f7da158b6d46?auto=format&fit=crop&q=80&w=800",
+    description: "Concave shaped premium almonds with high oil content. Direct from Pulwama."
+  },
+  {
+    id: 8,
+    name: "Copper Samovar",
+    category: "Art",
+    price: 8500,
+    rating: 5.0,
+    reviews: 45,
+    image: "https://images.unsplash.com/photo-1590490571989-5b199033915d?auto=format&fit=crop&q=80&w=800",
+    description: "Traditional engraved copper kettle used for brewing Kahwa, a masterpiece of craftsmanship."
+  },
+  {
+    id: 9,
+    name: "Kashmiri Red Chillies",
+    category: "Spices",
+    price: 450,
+    rating: 4.7,
+    reviews: 320,
+    image: "https://images.unsplash.com/photo-1596386967235-3d870259f003?auto=format&fit=crop&q=80&w=800",
+    description: "Famous for their brilliant red color and mild heat. Essential for Rogan Josh."
+  },
+  {
+    id: 10,
+    name: "Namda Felt Rug (3x5)",
+    category: "Textiles",
+    price: 4200,
+    rating: 4.5,
+    reviews: 28,
+    image: "https://images.unsplash.com/photo-1596139676037-5489c7826df2?auto=format&fit=crop&q=80&w=800",
+    description: "Woolen felt rug with chain-stitch embroidery (Aari work). Warm and decorative."
+  },
+  {
+    id: 11,
+    name: "Organic Saffron Honey",
+    category: "Food",
+    price: 950,
+    rating: 4.8,
+    reviews: 150,
+    image: "https://images.unsplash.com/photo-1587049359509-b785db362934?auto=format&fit=crop&q=80&w=800",
+    description: "Pure Himalayan honey infused with authentic saffron strands."
+  },
+  {
+    id: 12,
+    name: "Willow Wicker Basket",
+    category: "Art",
+    price: 1200,
+    rating: 4.6,
+    reviews: 67,
+    image: "https://images.unsplash.com/photo-1622277070962-1855169cb10d?auto=format&fit=crop&q=80&w=800",
+    description: "Hand-woven willow basket (Kangri style weaving) perfect for home decor or picnics."
+  }
+];
+
+// --- COMPONENTS ---
+
+const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false, type = 'button' }) => {
+  const baseStyle = "px-6 py-3 rounded-lg transition-all duration-300 font-medium tracking-wide flex items-center justify-center gap-2";
+  const variants = {
+    primary: "bg-amber-700 text-white hover:bg-amber-800 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed",
+    secondary: "bg-stone-800 text-white hover:bg-stone-900 disabled:opacity-50",
+    outline: "border-2 border-amber-700 text-amber-700 hover:bg-amber-50",
+    ghost: "text-stone-600 hover:text-amber-700 hover:bg-amber-50/50"
+  };
+  
+  return (
+    <button 
+      type={type}
+      onClick={onClick} 
+      disabled={disabled}
+      className={`${baseStyle} ${variants[variant]} ${className}`}
+    >
+      {children}
+    </button>
+  );
+};
+
+const SectionTitle = ({ title, subtitle }) => (
+  <div className="text-center mb-12">
+    <h2 className="text-3xl md:text-4xl font-serif font-bold text-stone-800 mb-3">{title}</h2>
+    <div className="w-24 h-1 bg-amber-600 mx-auto mb-4"></div>
+    <p className="text-stone-600 max-w-2xl mx-auto">{subtitle}</p>
+  </div>
+);
+
+const ProductCard = ({ product, onAdd }) => (
+  <div className="group bg-white rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-stone-100 flex flex-col h-full">
+    <div className="relative h-64 overflow-hidden">
+      <img 
+        src={product.image} 
+        alt={product.name} 
+        className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+      />
+      <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-bold text-amber-700 shadow-sm">
+        {product.category}
+      </div>
+    </div>
+    <div className="p-6 flex flex-col flex-grow">
+      <div className="flex justify-between items-start mb-2">
+        <h3 className="text-lg font-serif font-bold text-stone-800 group-hover:text-amber-700 transition-colors">
+          {product.name}
+        </h3>
+        <div className="flex items-center gap-1 text-amber-500 text-sm font-medium">
+          <Star size={14} fill="currentColor" />
+          <span>{product.rating}</span>
+        </div>
+      </div>
+      <p className="text-stone-500 text-sm mb-4 line-clamp-2 flex-grow">
+        {product.description}
+      </p>
+      <div className="flex items-center justify-between mt-auto pt-4 border-t border-stone-100">
+        <span className="text-xl font-bold text-stone-900">₹{product.price.toLocaleString()}</span>
+        <button 
+          onClick={() => onAdd(product)}
+          className="p-2 rounded-full bg-stone-100 text-stone-800 hover:bg-amber-700 hover:text-white transition-colors"
+        >
+          <ShoppingBag size={20} />
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+const CartDrawer = ({ isOpen, onClose, cart, onRemove, onUpdateQty, onCheckout }) => {
+  const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  return (
+    <>
+      <div 
+        className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+      />
+      <div className={`fixed top-0 right-0 h-full w-full md:w-96 bg-white z-50 shadow-2xl transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="flex flex-col h-full">
+          <div className="p-5 border-b border-stone-100 flex justify-between items-center bg-stone-50">
+            <h2 className="text-xl font-serif font-bold text-stone-800">Your Treasure Chest</h2>
+            <button onClick={onClose} className="p-2 hover:bg-stone-200 rounded-full transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+          <div className="flex-grow overflow-y-auto p-5 space-y-6">
+            {cart.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-stone-400 space-y-4">
+                <ShoppingBag size={64} opacity={0.2} />
+                <p>Your cart is empty.</p>
+                <button onClick={() => { onClose(); }} className="text-amber-700 font-medium hover:underline">Start Exploring</button>
+              </div>
+            ) : (
+              cart.map(item => (
+                <div key={item.id} className="flex gap-4">
+                  <img src={item.image} alt={item.name} className="w-20 h-20 object-cover rounded-lg border border-stone-100" />
+                  <div className="flex-grow">
+                    <h4 className="font-medium text-stone-800 line-clamp-1">{item.name}</h4>
+                    <p className="text-amber-700 font-bold text-sm">₹{item.price.toLocaleString()}</p>
+                    <div className="flex items-center justify-between mt-3">
+                      <div className="flex items-center border border-stone-200 rounded-md">
+                        <button onClick={() => onUpdateQty(item.id, Math.max(1, item.quantity - 1))} className="px-2 py-1 hover:bg-stone-100 text-stone-600">-</button>
+                        <span className="px-2 text-sm font-medium">{item.quantity}</span>
+                        <button onClick={() => onUpdateQty(item.id, item.quantity + 1)} className="px-2 py-1 hover:bg-stone-100 text-stone-600">+</button>
+                      </div>
+                      <button onClick={() => onRemove(item.id)} className="text-red-400 hover:text-red-600 text-xs underline">Remove</button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          {cart.length > 0 && (
+            <div className="p-5 border-t border-stone-100 bg-stone-50">
+              <div className="flex justify-between mb-4 text-lg font-bold text-stone-800">
+                <span>Subtotal</span>
+                <span>₹{total.toLocaleString()}</span>
+              </div>
+              <p className="text-xs text-stone-500 mb-4 text-center">Shipping & taxes calculated at checkout</p>
+              <Button onClick={onCheckout} className="w-full">Proceed to Checkout</Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+// --- TRACK ORDER COMPONENT ---
+const TrackOrder = () => {
+  const [orderId, setOrderId] = useState('');
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleTrack = (e) => {
+    e.preventDefault();
+    setError(null);
+    if (!orderId) {
+      setError("Please enter a valid order ID.");
+      return;
+    }
+    
+    setLoading(true);
+    setStatus(null);
+
+    // Simulate API call and different statuses based on the ID entered
+    setTimeout(() => {
+      setLoading(false);
+      
+      const orderNumber = parseInt(orderId.replace(/\D/g, ''), 10);
+      let newStatus;
+      
+      if (orderNumber % 3 === 0) {
+        newStatus = 'delivered';
+      } else if (orderNumber % 3 === 1) {
+        newStatus = 'shipped';
+      } else {
+        newStatus = 'processing';
+      }
+      
+      setStatus(newStatus); 
+      
+    }, 1500);
+  };
+
+  const getTimeline = (currentStatus) => {
+    const steps = [
+      { id: 'placed', title: 'Order Placed', time: 'Oct 18, 2025 • 10:42 AM', icon: CheckCircle },
+      { id: 'processing', title: 'Processing', time: 'Items being packed in Srinagar.', icon: Package },
+      { id: 'shipped', title: 'Shipped', time: 'Handover to courier service (Tracking #: AB123456789IN).', icon: Truck },
+      { id: 'delivered', title: 'Delivered', time: 'Expected by Oct 24, 2025', icon: MapPin },
+    ];
+
+    const currentIdx = steps.findIndex(s => s.id === currentStatus);
+    
+    return steps.map((step, index) => {
+      const isCompleted = index <= currentIdx;
+      const isActive = index === currentIdx;
+      
+      let iconColor = isCompleted ? 'bg-amber-600' : 'bg-stone-200';
+      let textColor = isCompleted ? 'text-stone-800' : 'text-stone-400';
+      
+      if (isActive) {
+        iconColor = 'bg-amber-700 animate-pulse';
+        textColor = 'text-amber-700';
+      }
+
+      return (
+        <div key={step.id} className="flex gap-4 items-start">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center z-10" >
+            <step.icon size={16} className={`w-8 h-8 p-1.5 rounded-full text-white ${iconColor}`} />
+          </div>
+          <div>
+            <h4 className={`font-bold ${textColor}`}>{step.title}</h4>
+            <p className="text-xs text-stone-500">{step.time}</p>
+          </div>
+        </div>
+      );
+    });
+  };
+
+  return (
+    <div className="py-12 container mx-auto px-4 max-w-2xl">
+      <SectionTitle title="Track Your Order" subtitle="Enter your Order ID to check the status of your shipment." />
+      
+      <div className="bg-white p-8 rounded-2xl shadow-lg border border-stone-100">
+        <form onSubmit={handleTrack} className="flex flex-col md:flex-row gap-4 mb-4">
+          <input 
+            type="text" 
+            placeholder="e.g., ORD-7829-XJ"
+            className="flex-grow px-4 py-3 rounded-lg border border-stone-300 focus:border-amber-600 focus:ring-2 focus:ring-amber-200 outline-none transition-all"
+            value={orderId}
+            onChange={(e) => setOrderId(e.target.value)}
+            required
+          />
+          <Button type="submit" disabled={loading}>
+            {loading ? 'Locating...' : 'Track'}
+          </Button>
+        </form>
+        
+        {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 flex items-center gap-2" role="alert">
+                <AlertCircle size={18} />
+                <span className="block sm:inline">{error}</span>
+            </div>
+        )}
+
+        {status && (
+          <div className="border-t border-stone-100 pt-8">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <p className="text-sm text-stone-500">Order ID</p>
+                <p className="font-bold text-stone-800">{orderId}</p>
+              </div>
+              <div>
+                <p className="text-sm text-stone-500">Expected Status</p>
+                <p className={`font-bold ${status === 'delivered' ? 'text-green-600' : 'text-amber-700'}`}>{status.toUpperCase()}</p>
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-stone-200 ml-4"></div>
+              <div className="space-y-8 relative">
+                {getTimeline(status)}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --- LEGAL PAGE COMPONENT ---
+const LegalPage = ({ type }) => {
+  const content = {
+    privacy: {
+      title: "Privacy Policy",
+      icon: Lock,
+      text: (
+        <div className="space-y-6 text-stone-600">
+          <p>
+            **Effective Date: November 21, 2025**
+            <br/>At Vadi-e-Kashmir, we value the trust you place in us. That's why we insist upon the highest standards for secure transactions and customer information privacy. This policy details how we collect, use, and protect your personal data.
+          </p>
+          <h3 className="text-xl font-bold text-stone-800 mt-4 border-b pb-1">1. Information We Collect</h3>
+          <p>We collect essential Personally Identifiable Information (PII) when you register, place an order, or participate in surveys. This includes your email address, full name, shipping and billing address, and phone number. Our use of Firebase ensures your data is stored securely and privately.</p>
+          
+          <h3 className="text-xl font-bold text-stone-800 mt-4 border-b pb-1">2. Data Usage and Security</h3>
+          <p>
+            Your information is primarily used to process orders, communicate tracking updates, and personalize your shopping experience. We will never sell your personal information to third-party marketers.
+            <br/><br/>
+            Our site utilizes stringent security measures (SSL/TLS) and leverages Razorpay for payment processing, meaning we **do not** store sensitive payment card details (CVV, full card number).
+          </p>
+
+          <h3 className="text-xl font-bold text-stone-800 mt-4 border-b pb-1">3. Persistent Cart Data (Firestore)</h3>
+          <p>
+            To enhance your experience, we use Google Firestore to save your cart contents. This allows you to close the browser and find your items exactly where you left them, ensuring a seamless shopping experience across devices. This data is private and linked only to your anonymous user ID.
+          </p>
+        </div>
+      )
+    },
+    terms: {
+      title: "Terms of Service",
+      icon: FileText,
+      text: (
+        <div className="space-y-6 text-stone-600">
+          <p>
+            **Last Updated: November 21, 2025**
+            <br/>Welcome to Vadi-e-Kashmir. By using this website, you agree to comply with and be bound by the following terms and conditions of use.
+          </p>
+          <h3 className="text-xl font-bold text-stone-800 mt-4 border-b pb-1">1. Product Authenticity and Variation</h3>
+          <p>
+            We guarantee the authenticity of our products, especially GI-Tagged items like Pashmina and Saffron. As most items are hand-crafted (e.g., Papier-Mâché, Samovars), slight variations in color, size, and design may occur, which is a characteristic of genuine artisan work and not a defect.
+          </p>
+          <h3 className="text-xl font-bold text-stone-800 mt-4 border-b pb-1">2. Order Fulfillment and Shipping</h3>
+          <p>
+            Orders are processed within 2-3 business days from our warehouse in Srinagar. We rely on third-party courier services for delivery. While we provide estimated delivery dates, Vadi-e-Kashmir is not responsible for delays caused by force majeure, weather conditions, or customs clearance (for international shipments).
+          </p>
+          <h3 className="text-xl font-bold text-stone-800 mt-4 border-b pb-1">3. Jurisdiction</h3>
+          <p>
+            These terms and conditions are governed by the laws of India, and specifically the jurisdiction of the courts in Srinagar, Jammu & Kashmir, India.
+          </p>
+        </div>
+      )
+    }
+  };
+
+  const data = content[type] || content.privacy;
+
+  return (
+    <div className="py-12 container mx-auto px-4 md:px-6 max-w-4xl">
+      <div className="bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-stone-100">
+        <h1 className="text-3xl font-serif font-bold text-stone-800 mb-6 pb-4 border-b border-stone-100 flex items-center gap-3">
+            <data.icon size={28} className="text-amber-700" />
+            {data.title}
+        </h1>
+        <div className="prose prose-stone max-w-none">
+          {data.text}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- MAIN APP COMPONENT ---
+
+export default function App() {
+  const [view, setView] = useState('home'); // home, shop, about, track, privacy, terms
+  const [cart, setCart] = useState([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [activeCategory, setActiveCategory] = useState('All');
+  
+  // Firebase States
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [userId, setUserId] = useState(null);
+  const [cartLoading, setCartLoading] = useState(true);
+
+  // Payment States
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState(false);
+
+  // Get config from global scope (via window)
+  const firebaseConfig = getFirebaseConfig();
+  const initialAuthToken = getAuthToken();
+  const currentAppId = getAppId();
+
+
+  // --- 1. FIREBASE INITIALIZATION & AUTH ---
+  useEffect(() => {
+    // Check if configuration is available
+    if (Object.keys(firebaseConfig).length === 0) {
+      console.warn("Firebase configuration is missing. Persistence is disabled.");
+      setIsAuthReady(true);
+      setCartLoading(false);
+      return;
+    }
+
+    try {
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                setUserId(user.uid);
+            } else {
+                // Sign in anonymously if no user is authenticated
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    setUserId(auth.currentUser?.uid || 'anonymous-user');
+                } catch (error) {
+                    console.error("Firebase Auth Error:", error);
+                    setUserId('auth-error-user');
+                }
+            }
+            setIsAuthReady(true);
+        });
+
+        return () => unsubscribe();
+    } catch (e) {
+        console.error("Firebase Initialization Failed:", e);
+        setIsAuthReady(true);
+        setCartLoading(false);
+    }
+  }, [/* firebaseConfig and initialAuthToken are read-only objects here; leaving deps empty avoids repeated init */]);
+
+  // --- 2. FIRESTORE CART LISTENER (LOAD) ---
+  useEffect(() => {
+    if (!isAuthReady || !userId || !db || userId === 'auth-error-user' || userId === 'anonymous-user') {
+        if(isAuthReady) setCartLoading(false);
+        return;
+    }
+    
+    const cartDocPath = `artifacts/${currentAppId}/users/${userId}/carts/currentCart`;
+    const cartRef = doc(db, cartDocPath);
+    
+    console.log("Listening to cart data at:", cartDocPath);
+
+    const unsubscribe = onSnapshot(cartRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data && data.items) {
+          try {
+            const loadedCart = data.items.map(item => ({
+              ...item,
+              price: Number(item.price),
+              quantity: Number(item.quantity)
+            }));
+            setCart(loadedCart);
+          } catch(e) {
+            console.error("Failed to parse cart data:", e);
+          }
+        }
+      }
+      setCartLoading(false);
+    }, (error) => {
+        console.error("Error listening to cart changes:", error);
+        setCartLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [isAuthReady, userId, currentAppId]);
+
+  // --- 3. FIRESTORE CART SAVER (SAVE) ---
+  const saveCartToFirestore = async (currentCart) => {
+    if (!userId || !db || userId === 'auth-error-user' || userId === 'anonymous-user') {
+        return; // Skip saving if not fully authenticated or using mock data
+    }
+
+    const cartDocPath = `artifacts/${currentAppId}/users/${userId}/carts/currentCart`;
+    const cartRef = doc(db, cartDocPath);
+
+    const cartData = {
+        items: currentCart.map(item => ({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            image: item.image,
+        })),
+        updatedAt: new Date().toISOString()
+    };
+
+    try {
+        await setDoc(cartRef, cartData);
+    } catch (error) {
+        console.error("Failed to save cart to Firestore:", error);
+    }
+  };
+  
+  useEffect(() => {
+    // Only save after Auth is ready and initial loading is complete
+    if (isAuthReady && !cartLoading) {
+        saveCartToFirestore(cart);
+    }
+  }, [cart, isAuthReady, cartLoading, currentAppId]);
+
+
+  // Cart Logic
+  const addToCart = (product) => {
+    setCart(prev => {
+      const existing = prev.find(item => item.id === product.id);
+      let newCart;
+      if (existing) {
+        newCart = prev.map(item => 
+          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+        );
+      } else {
+        newCart = [...prev, { ...product, quantity: 1 }];
+      }
+      return newCart;
+    });
+    setIsCartOpen(true);
+  };
+
+  const updateQty = (id, qty) => {
+    setCart(prev => prev.map(item => item.id === id ? { ...item, quantity: qty } : item));
+  };
+
+  const removeFromCart = (id) => {
+    setCart(prev => prev.filter(item => item.id !== id));
+  };
+
+  const clearCart = () => {
+    setCart([]);
+  };
+
+  const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Filter Logic
+  const categories = ['All', ...new Set(PRODUCTS.map(p => p.category))];
+  const filteredProducts = activeCategory === 'All' 
+    ? PRODUCTS 
+    : PRODUCTS.filter(p => p.category === activeCategory);
+
+  // --- SIMPLIFIED CHECKOUT HANDLER (Bypassing Razorpay SDK) ---
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    
+    setIsCartOpen(false);
+    setIsProcessing(true);
+
+    // SIMULATION: We simulate the payment processing delay (2 seconds) and success state.
+    setTimeout(() => {
+         setOrderSuccess(true);
+         setIsProcessing(false);
+         clearCart();
+    }, 2000);
+  };
+
+  return (
+    <div className="min-h-screen bg-stone-50 font-sans text-stone-900 selection:bg-amber-200 flex flex-col">
+      
+      {/* --- NAVBAR --- */}
+      <nav className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-stone-100">
+        <div className="container mx-auto px-4 md:px-6 h-20 flex items-center justify-between">
+          
+          {/* Logo */}
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('home')}>
+            <div className="w-10 h-10 bg-amber-700 rounded-tr-xl rounded-bl-xl flex items-center justify-center text-white">
+              <span className="font-serif text-xl font-bold">V</span>
+            </div>
+            <div>
+              <h1 className="font-serif text-xl font-bold text-stone-900 leading-none">Vadi-e-Kashmir</h1>
+              <p className="text-[10px] tracking-widest text-amber-700 uppercase">Art of Himalayas</p>
+            </div>
+          </div>
+
+          {/* Desktop Links */}
+          <div className="hidden md:flex items-center gap-8 font-medium text-stone-600">
+            <button onClick={() => setView('home')} className={`hover:text-amber-700 transition-colors ${view === 'home' ? 'text-amber-700' : ''}`}>Home</button>
+            <button onClick={() => setView('shop')} className={`hover:text-amber-700 transition-colors ${view === 'shop' ? 'text-amber-700' : ''}`}>Shop</button>
+            <button onClick={() => setView('track')} className={`hover:text-amber-700 transition-colors ${view === 'track' ? 'text-amber-700' : ''}`}>Track Order</button>
+            <button onClick={() => setView('about')} className={`hover:text-amber-700 transition-colors ${view === 'about' ? 'text-amber-700' : ''}`}>Our Story</button>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-4">
+            <button className="hidden md:block p-2 hover:bg-stone-100 rounded-full text-stone-600 transition-colors">
+              <Search size={20} />
+            </button>
+            <button 
+              onClick={() => setIsCartOpen(true)}
+              className="relative p-2 hover:bg-stone-100 rounded-full text-stone-600 transition-colors"
+            >
+              <ShoppingBag size={20} />
+              {cartCount > 0 && (
+                <span className="absolute top-0 right-0 w-4 h-4 bg-amber-600 text-white text-[10px] font-bold flex items-center justify-center rounded-full">
+                  {cartCount}
+                </span>
+              )}
+            </button>
+            <button 
+              className="md:hidden p-2 hover:bg-stone-100 rounded-full text-stone-600"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+            >
+              {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Menu */}
+        {isMenuOpen && (
+          <div className="md:hidden bg-white border-b border-stone-100 py-4 px-4 flex flex-col gap-4">
+            <button onClick={() => { setView('home'); setIsMenuOpen(false); }} className="text-left font-medium hover:text-amber-700">Home</button>
+            <button onClick={() => { setView('shop'); setIsMenuOpen(false); }} className="text-left font-medium hover:text-amber-700">Shop Collections</button>
+            <button onClick={() => { setView('track'); setIsMenuOpen(false); }} className="text-left font-medium hover:text-amber-700">Track Order</button>
+            <button onClick={() => { setView('about'); setIsMenuOpen(false); }} className="text-left font-medium hover:text-amber-700">Our Story</button>
+          </div>
+        )}
+      </nav>
+
+      {/* --- MAIN CONTENT --- */}
+      <main className="flex-grow">
+        
+        {/* Loading Indicator for Firestore Cart Load */}
+        {cartLoading && isAuthReady && (
+            <div className="fixed inset-0 z-[60] bg-stone-50/80 flex items-center justify-center backdrop-blur-sm">
+                <div className="w-10 h-10 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin"></div>
+                <p className="ml-4 text-stone-600 font-medium">Loading your saved cart...</p>
+            </div>
+        )}
+        
+        {/* Processing Overlay (Razorpay Simulation) */}
+        {isProcessing && (
+           <div className="fixed inset-0 z-[70] bg-black/70 flex flex-col items-center justify-center text-white backdrop-blur-sm">
+             <div className="w-16 h-16 border-4 border-white/30 border-t-amber-500 rounded-full animate-spin mb-4"></div>
+             <p className="text-lg font-bold animate-pulse">Processing Payment Securely...</p>
+           </div>
+        )}
+
+        {/* Success Screen Overlay */}
+        {orderSuccess && (
+          <div className="fixed inset-0 z-[70] bg-white flex flex-col items-center justify-center text-center p-4 animate-in fade-in duration-500">
+             <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-6 shadow-lg animate-bounce">
+               <CheckCircle size={48} />
+             </div>
+             <h2 className="text-4xl font-serif font-bold text-stone-800 mb-2">Payment Successful!</h2>
+             <p className="text-stone-500 max-w-md mb-8">Your order has been placed successfully. You will receive a confirmation email with your tracking ID shortly.</p>
+             <div className="bg-stone-50 p-4 rounded-lg border border-stone-200 mb-8">
+               <p className="text-xs uppercase tracking-wide text-stone-400 mb-1">Order ID</p>
+               <p className="font-mono font-bold text-xl text-stone-800">ORD-8829-{Math.floor(Math.random() * 1000)}</p>
+             </div>
+             <div className="flex gap-4">
+               <Button onClick={() => { setOrderSuccess(false); setView('track'); }}>Track Order</Button>
+               <Button variant="outline" onClick={() => { setOrderSuccess(false); setView('home'); }}>Back to Home</Button>
+             </div>
+          </div>
+        )}
+
+        {view === 'home' && (
+          <>
+            {/* Hero Section */}
+            <section className="relative h-[85vh] flex items-center overflow-hidden">
+              <div className="absolute inset-0 z-0">
+                <img 
+                  src="https://images.unsplash.com/photo-1595865749868-6077b60b735a?auto=format&fit=crop&q=80&w=2000" 
+                  alt="Kashmir Landscape" 
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-black/30"></div>
+              </div>
+              
+              <div className="container mx-auto px-4 md:px-6 relative z-10 text-white text-center md:text-left">
+                <div className="animate-in slide-in-from-bottom-10 fade-in duration-700">
+                  <span className="inline-block px-3 py-1 mb-4 border border-white/30 backdrop-blur-md rounded-full text-xs tracking-widest uppercase bg-white/10">
+                    Authentic & Rare
+                  </span>
+                  <h1 className="text-5xl md:text-7xl font-serif font-bold mb-6 leading-tight">
+                    The Soul of <br/><span className="text-amber-400">Kashmir</span>
+                  </h1>
+                  <p className="text-lg md:text-xl text-stone-200 mb-8 max-w-lg">
+                    Discover the finest Pashmina, rarest Saffron, and exquisite craftsmanship delivered directly from the artisans of the Himalayas to your doorstep.
+                  </p>
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <Button onClick={() => setView('shop')}>Explore Collections</Button>
+                    <Button variant="outline" className="border-white text-white hover:bg-white hover:text-stone-900" onClick={() => setView('about')}>
+                      Our Heritage
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Featured Categories */}
+            <section className="py-20 container mx-auto px-4 md:px-6">
+               <SectionTitle 
+                 title="Curated Treasures" 
+                 subtitle="Handpicked rare products that define the legacy of the region."
+               />
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                 {[
+                   { title: "Pashmina", img: "https://images.unsplash.com/photo-1606293926249-ed2297699f40?auto=format&fit=crop&q=80&w=800", desc: "The soft gold of Changthangi goats." },
+                   { title: "Saffron (Kesar)", img: "https://images.unsplash.com/photo-1615485290386-254d519dc75b?auto=format&fit=crop&q=80&w=800", desc: "Red gold harvested from Pampore." },
+                   { title: "Handicrafts", img: "https://images.unsplash.com/photo-1605218427368-35b06144b5d5?auto=format&fit=crop&q=80&w=800", desc: "Intricate walnut wood and paper maché." },
+                 ].map((item, idx) => (
+                   <div key={idx} onClick={() => setView('shop')} className="group cursor-pointer relative h-96 rounded-xl overflow-hidden shadow-lg">
+                     <img src={item.img} alt={item.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-8 text-white">
+                        <h3 className="text-2xl font-serif font-bold mb-2">{item.title}</h3>
+                        <p className="text-stone-300 text-sm opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-500">{item.desc}</p>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+            </section>
+          </>
+        )}
+
+        {view === 'shop' && (
+          <section className="py-12 container mx-auto px-4 md:px-6 min-h-screen">
+            <div className="mb-10">
+              <h2 className="text-4xl font-serif font-bold text-stone-800 mb-6">Shop Collections</h2>
+              <div className="flex flex-wrap gap-2">
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      activeCategory === cat 
+                        ? 'bg-amber-700 text-white shadow-md' 
+                        : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredProducts.map(product => (
+                <ProductCard key={product.id} product={product} onAdd={addToCart} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {view === 'track' && <TrackOrder />}
+        {view === 'privacy' && <LegalPage type="privacy" />}
+        {view === 'terms' && <LegalPage type="terms" />}
+
+        {view === 'about' && (
+          <section className="py-20 bg-white">
+            <div className="container mx-auto px-4 md:px-6 max-w-4xl">
+              <div className="text-center mb-12">
+                <h1 className="text-4xl md:text-5xl font-serif font-bold text-stone-800 mb-6">Preserving the Legacy</h1>
+                <p className="text-xl text-stone-500 italic">"A thread of Pashmina is a thread of history."</p>
+              </div>
+              
+              <div className="prose prose-lg prose-stone mx-auto">
+                <p>
+                  Vadi-e-Kashmir was born from a desire to bridge the gap between the master artisans of the valley and the connoisseurs of the world. 
+                  For centuries, the Silk Route passed through these mountains, carrying spices, silks, and stories.
+                </p>
+                <p>
+                  Today, we bring that market to your screen. Every strand of Saffron is sourced from the fields of Pampore. 
+                  Every Pashmina is hand-spun in the traditional homes of Srinagar. We don't just sell products; we deliver a piece of culture.
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+      </main>
+
+      {/* --- FOOTER --- */}
+      <footer className="bg-stone-900 text-stone-400 py-16 border-t border-stone-800">
+        <div className="container mx-auto px-4 md:px-6 grid grid-cols-1 md:grid-cols-4 gap-12">
+          <div>
+             <h2 className="font-serif text-2xl text-white mb-6">Vadi-e-Kashmir</h2>
+             <p className="text-sm mb-6">Bringing the rarest treasures of the Himalayas to the world. Authentic, ethical, and premium.</p>
+             <div className="flex gap-4">
+               <div className="w-8 h-8 bg-stone-800 rounded-full flex items-center justify-center hover:bg-amber-700 hover:text-white transition-colors cursor-pointer"><Instagram size={16} /></div>
+               <div className="w-8 h-8 bg-stone-800 rounded-full flex items-center justify-center hover:bg-amber-700 hover:text-white transition-colors cursor-pointer"><Facebook size={16} /></div>
+               <div className="w-8 h-8 bg-stone-800 rounded-full flex items-center justify-center hover:bg-amber-700 hover:text-white transition-colors cursor-pointer"><Twitter size={16} /></div>
+             </div>
+          </div>
+          
+          <div>
+            <h3 className="text-white font-bold mb-6">Quick Links</h3>
+            <ul className="space-y-3 text-sm">
+              <li className="hover:text-amber-500 cursor-pointer" onClick={() => setView('home')}>Home</li>
+              <li className="hover:text-amber-500 cursor-pointer" onClick={() => setView('shop')}>Shop All</li>
+              <li className="hover:text-amber-500 cursor-pointer" onClick={() => setView('about')}>Our Story</li>
+              <li className="hover:text-amber-500 cursor-pointer" onClick={() => setView('track')}>Track Order</li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="text-white font-bold mb-6">Legal</h3>
+            <ul className="space-y-3 text-sm">
+              <li className="hover:text-amber-500 cursor-pointer" onClick={() => setView('privacy')}>Privacy Policy</li>
+              <li className="hover:text-amber-500 cursor-pointer" onClick={() => setView('terms')}>Terms of Service</li>
+              <li className="hover:text-amber-500 cursor-pointer">Shipping Policy</li>
+              <li className="hover:text-amber-500 cursor-pointer">Return Policy</li>
+            </ul>
+          </div>
+
+          <div>
+             <h3 className="text-white font-bold mb-6">Contact</h3>
+             <ul className="space-y-4 text-sm">
+               <li className="flex items-start gap-3">
+                 <MapPin size={18} className="text-amber-600 mt-1 flex-shrink-0" />
+                 <span>Main Bazaar, Residency Road,<br/>Srinagar, Jammu & Kashmir<br/>Pin: 190001, India</span>
+               </li>
+               <li className="flex items-start gap-3">
+                 <Phone size={18} className="text-amber-600 mt-1 flex-shrink-0" />
+                 <span>+91 194 245 1234</span>
+               </li>
+               <li className="flex items-start gap-3">
+                 <Mail size={18} className="text-amber-600 mt-1 flex-shrink-0" />
+                 <span>hello@vadiekashmir.com</span>
+               </li>
+             </ul>
+             {userId && (
+                <div className='mt-6 text-xs bg-stone-800 p-2 rounded'>
+                    <p className='text-amber-400'>User ID (For Persistence)</p>
+                    <p className='truncate'>{userId}</p>
+                </div>
+             )}
+          </div>
+        </div>
+        <div className="container mx-auto px-4 md:px-6 mt-12 pt-8 border-t border-stone-800 text-center text-xs flex flex-col md:flex-row justify-between items-center gap-4">
+          <p>&copy; 2025 Vadi-e-Kashmir. All Rights Reserved.</p>
+          <div className="flex gap-4 text-xs">
+             <span>FSSAI License No: 11021456000123</span>
+             <span>•</span>
+             <span>Craft Council Certified</span>
+          </div>
+        </div>
+      </footer>
+
+      <CartDrawer 
+        isOpen={isCartOpen} 
+        onClose={() => setIsCartOpen(false)} 
+        cart={cart}
+        onRemove={removeFromCart}
+        onUpdateQty={updateQty}
+        onCheckout={handleCheckout}
+      />
+
+    </div>
+  );
+}
