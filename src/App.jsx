@@ -310,27 +310,142 @@ const TrackOrder = () => {
   );
 };
 
-const LegalPage = ({ type }) => {
-  const content = {
-    privacy: { title: "Privacy Policy", icon: Lock, text: (<div className="space-y-6 text-stone-600"><p><strong>Effective Date: November 21, 2025</strong><br/>We use Firestore to persist cart data. We do not store payment card details.</p></div>) },
-    terms: { title: "Terms of Service", icon: FileText, text: (<div className="space-y-6 text-stone-600"><p><strong>Last Updated: November 21, 2025</strong></p></div>) }
-  };
-  const data = content[type] || content.privacy;
-  return (
-    <div className="py-12 container mx-auto px-4 md:px-6 max-w-4xl">
-      <div className="bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-stone-100">
-        <h1 className="text-3xl font-serif font-bold text-stone-800 mb-6 pb-4 border-b border-stone-100 flex items-center gap-3"><data.icon size={28} className="text-amber-700" />{data.title}</h1>
-        <div className="prose prose-stone max-w-none">{data.text}</div>
+// NEW SECTIONCONTENT COMPONENT
+const SectionContent = ({ title, icon, children }) => (
+  <div className="py-12 container mx-auto px-4 md:px-6 max-w-4xl">
+    <div className="bg-white p-8 md:p-12 rounded-2xl shadow-xl border border-stone-100">
+      <h1 className="text-3xl md:text-4xl font-serif font-bold text-stone-800 mb-6 pb-4 border-b border-stone-100 flex items-center gap-3">
+        {icon && React.createElement(icon, { size: 30, className: "text-amber-700 flex-shrink-0" })}
+        {title}
+      </h1>
+      <div className="prose prose-stone max-w-none text-stone-600 leading-relaxed space-y-6">
+        {children}
       </div>
     </div>
+  </div>
+);
+
+
+const LegalPage = ({ type }) => {
+  const content = {
+    privacy: { 
+      title: "Privacy Policy", icon: Lock, 
+      text: (
+        <>
+          <p><strong>Effective Date: November 24, 2025</strong></p>
+          <p>At Vadi-e-Kashmir, we are committed to protecting your privacy and ensuring a secure shopping experience. This policy explains what information we collect, how we use it, and how we keep it safe.</p>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>1. Information We Collect</h2>
+          <ul>
+            <li><strong>Personal Information (Direct):</strong> When you register, purchase, or contact us, we collect your name, email address, shipping address, and phone number.</li>
+            <li><strong>Payment Information:</strong> We do NOT store your full credit card details. All payment processing is handled securely by PCI-compliant third-party providers (like Stripe or Razorpay). We only receive transaction confirmation and the last four digits of your card.</li>
+            <li><strong>Cart Data:</strong> We use **Firebase Firestore** to securely store your active cart contents, which is tied to your unique user ID. This allows your cart to persist across devices and sessions.</li>
+            <li><strong>Usage Data:</strong> We collect anonymous data about how you use the site (e.g., pages viewed, time spent) to improve our service.</li>
+          </ul>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>2. How We Use Your Information</h2>
+          <p>Your information is used strictly for:</p>
+          <ul>
+            <li>Processing your orders and managing deliveries.</li>
+            <li>Communicating order updates, tracking information, and customer service responses.</li>
+            <li>Securing and maintaining your account and providing the seamless shopping experience (via Firebase Auth and Firestore).</li>
+            <li>Marketing, only if you explicitly opt-in for newsletters.</li>
+          </ul>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>3. Data Security and Storage</h2>
+          <p>We take security seriously. Your data is stored on Google's **Firebase platform**, which provides industry-leading security and compliance. Access to your personal information is strictly limited to authorized personnel who need the data to perform their job (e.g., fulfilling your order).</p>
+          
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>4. Your Choices</h2>
+          <p>You can always access or update your account information. If you wish to close your account and have your data permanently deleted, please contact us at support@vadiekashmir.com.</p>
+        </>
+      )
+    },
+    terms: { 
+      title: "Terms of Service", icon: FileText, 
+      text: (
+        <>
+          <p><strong>Last Updated: November 24, 2025</strong></p>
+          <p>Welcome to Vadi-e-Kashmir. By accessing and using our website, you agree to comply with and be bound by the following terms and conditions.</p>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>1. Acceptance of Terms</h2>
+          <p>These Terms of Service govern your use of the Vadi-e-Kashmir platform and all services provided by us. If you disagree with any part of the terms, then you may not access the service.</p>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>2. Product Authenticity and Pricing</h2>
+          <p>We guarantee the authenticity of all products sold, which are sourced directly from verified Kashmiri artisans. Prices are listed in INR (₹) and are subject to change without prior notice. The price charged will be the one displayed at the time of checkout.</p>
+          
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>3. User Accounts</h2>
+          <p>You are responsible for maintaining the confidentiality of your account and password and for restricting access to your devices. You agree to accept responsibility for all activities that occur under your account.</p>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>4. Limitation of Liability</h2>
+          <p>Vadi-e-Kashmir, its employees, or affiliates shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from (i) your access to or use of or inability to access or use the Service; (ii) any conduct or content of any third party on the Service.</p>
+        </>
+      )
+    },
+    shipping: {
+      title: "Shipping & Delivery Policy", icon: Truck,
+      text: (
+        <>
+          <p><strong>Commitment:</strong> We are dedicated to ensuring your authentic treasures from the valley reach you safely and efficiently. Due to the specialized nature of our products and our direct sourcing model from Kashmir, delivery times are carefully managed.</p>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>1. Processing & Delivery Timeline</h2>
+          <ul>
+            <li><strong>Processing Time:</strong> 1-3 business days (for verification, quality check, and packaging).</li>
+            <li><strong>Standard Delivery Time:</strong> Once shipped, the delivery typically takes **7-10 business days** for most major metropolitan areas in India. Remote or rural locations may require 10-14 business days.</li>
+            <li><strong>Total Expected Time:</strong> Please allow a total of **8 to 13 business days** from the date of order for delivery.</li>
+          </ul>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>2. Shipping Costs</h2>
+          <p>Shipping costs are calculated at checkout based on the weight and dimensions of your order and the final delivery location. Free shipping may be offered during promotional periods.</p>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>3. Tracking</h2>
+          <p>A tracking number will be provided via email and SMS within 24-48 hours after your order has been shipped. You can also use our **Track Order** page for status updates.</p>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>4. Packaging</h2>
+          <p>We use high-quality, eco-conscious packaging to ensure the delicate nature of items like Pashmina and Papier-Mâché is preserved during transit.</p>
+        </>
+      )
+    },
+    return: {
+      title: "Returns & Exchange Policy", icon: Package,
+      text: (
+        <>
+          <p><strong>Policy Summary:</strong> Given the artisan nature of our products and the logistics involved in shipping from the valley, we maintain a strict policy focused on damage inspection. Your trust in our quality means we minimize returns.</p>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>1. Acceptable Returns (Damage Only)</h2>
+          <p>Returns will **ONLY** be accepted in the event of **transit damage** (e.g., shattered papier-mâché, spoiled food item, visible tearing/stains on a textile that occurred during shipping). Returns due to transit damage must be reported within **48 hours** of delivery.</p>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>2. The Inspection Process</h2>
+          <ul>
+            <li><strong>Mandatory Photo/Video Proof:</strong> You must provide clear photographic and video evidence of the damaged product **and** the condition of the original packaging.</li>
+            <li><strong>Verification:</strong> Our quality control team will inspect the proof. If damage is verified, we will arrange a return pickup.</li>
+            <li><strong>Refund/Credit:</strong> Upon receiving and final inspection of the damaged item, a full refund will be initiated to your original payment method.</li>
+          </ul>
+
+          <h2 className='text-2xl font-bold pt-4 text-stone-800'>3. No Exchange or Change of Mind</h2>
+          <ul>
+            <li><strong>NO EXCHANGE:</strong> We do not offer product exchanges.</li>
+            <li><strong>NO RETURNS for Change of Mind:</strong> We cannot accept returns for reasons such as "changed my mind," "didn't like the color/texture," or "it's not what I expected." Product details, including material and dimensions, are fully described on the product pages.</li>
+            <li><strong>Minor Variations:</strong> Handcrafted items, by nature, may have minor variations in color, size, or pattern. These are not considered defects and will not qualify for a return.</li>
+          </ul>
+        </>
+      )
+    }
+  };
+  const data = content[type] || content.privacy;
+  
+  return (
+    <SectionContent title={data.title} icon={data.icon}>
+      {data.text}
+    </SectionContent>
   );
 };
+
 
 /* --------------------------
    Main App
    -------------------------- */
 export default function App() {
-  const [view, setView] = useState('home'); // home, shop, track, about, auth:login/signup/reset, privacy, terms
+  const [view, setView] = useState('home'); // home, shop, track, about, auth:login/signup/reset, privacy, terms, shipping, return
   const [activeCategory, setActiveCategory] = useState('All');
 
   // cart
@@ -537,21 +652,21 @@ export default function App() {
               <SectionTitle title="Featured Collections" subtitle="Handpicked artisan products and regional specialties." />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div onClick={() => { setView('shop'); setActiveCategory('Textiles'); }} className="cursor-pointer group relative rounded-xl overflow-hidden h-64 shadow-lg">
-                  <img src="https://images.unsplash.com/photo-1606293926249-ed2297699f40?auto=format&fit=crop&q=80&w=1200" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Pashmina" />
+                  <img src="https://imgs.search.brave.com/8CwUqXbu_gS9cKw7U5HHRQBNAKEE9yKzQqiNiwigB4c/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9zaGFo/a2Fhci5jb20vY2Ru/L3Nob3AvZmlsZXMv/WVAyMjdfNi5qcGc_/dj0xNzYxMTUzMTc5/JndpZHRoPTQxMjk" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Pashmina" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 flex items-end p-6 text-white">
                     <div><h3 className="text-2xl font-serif font-bold">Pashmina</h3><p className="text-sm opacity-90">Soft gold from Changthangi goats.</p></div>
                   </div>
                 </div>
 
                 <div onClick={() => { setView('shop'); setActiveCategory('Spices'); }} className="cursor-pointer group relative rounded-xl overflow-hidden h-64 shadow-lg">
-                  <img src="https://images.unsplash.com/photo-1615485290386-254d519dc75b?auto=format&fit=crop&q=80&w=1200" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Saffron" />
+                  <img src="https://imgs.search.brave.com/5uwgh-AxYPqvrDLYfuQgsnduVQ-94_Rr7Hv-VN-T99I/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9tZWRp/YS5nZXR0eWltYWdl/cy5jb20vaWQvNjE5/OTQxNjkyL3Bob3Rv/L2Eta2FzaG1pcmkt/ZmFybWVyLXNob3dz/LXNhZmZyb24tcGV0/YWxzLWFmdGVyLWJl/aW5nLXBpY2tlZC1m/cm9tLWZsb3dlcnMt/YXQtcGFtcG9yZS1z/b3V0aC1vZi5qcGc_/cz02MTJ4NjEyJnc9/MCZrPTIwJmM9QTZx/bWkwVUhrRWx4enNY/eXFmaFJnamc1ckhy/SUxqMks4TWR6SHpN/SUI1Zz0" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Saffron" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 flex items-end p-6 text-white">
                     <div><h3 className="text-2xl font-serif font-bold">Pampore Saffron</h3><p className="text-sm opacity-90">Red threads with powerful aroma.</p></div>
                   </div>
                 </div>
 
                 <div onClick={() => { setView('shop'); setActiveCategory('Art'); }} className="cursor-pointer group relative rounded-xl overflow-hidden h-64 shadow-lg">
-                  <img src="https://images.unsplash.com/photo-1605218427368-35b06144b5d5?auto=format&fit=crop&q=80&w=1200" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Handicrafts" />
+                  <img src="https://imgs.search.brave.com/ZQmC7Yi-feaQT4xNoCygNv6Z17NLTUoA9x8Ge2hmg14/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9kaXJl/Y3RjcmVhdGVlY29t/ZGV2LnMzLmFwLXNv/dXRoLTEuYW1hem9u/YXdzLmNvbS9jb2xs/YWIvY3JhZnQxNTgy/ODAxNzY1V2FsbnV0/LUJhbm5lci5qcGc" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Handicrafts" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 flex items-end p-6 text-white">
                     <div><h3 className="text-2xl font-serif font-bold">Handicrafts</h3><p className="text-sm opacity-90">Paper-mâché, wood carving & more.</p></div>
                   </div>
@@ -638,7 +753,7 @@ export default function App() {
                   </p>
                 </div>
                 <div className="md:w-1/2 rounded-xl overflow-hidden shadow-2xl transform hover:scale-[1.02] transition-transform duration-700">
-                  <img src="https://imgs.search.brave.com/VvN0lDt3Z9QfdMDo8H5a0SJlyyMJ8MJre-zXsMVTEkM/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pbWFn/ZXMucGV4ZWxzLmNv/bS9waG90b3MvMjQz/OTc4Ny9wZXhlbHMt/cGhvdG8tMjQzOTc4/Ny5qcGVnP2F1dG89/Y29tcHJlc3MmY3M9/dGlueXNyZ2ImZHBy/PTEmdz01MDA" alt="Kashmiri landscape or architecture" className="w-full h-80 object-cover" />
+                  <img src="https://imgs.search.brave.com/TgdSLNIbB7UqLV6bMXi3Lw3A3Za2vvLv3QXmkgf8eOw/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pbWcu/ZnJlZXBpay5jb20v/ZnJlZS1waG90by9i/cmVhdGh0YWtpbmct/c2NlbmVyeS1hbWF6/aW5nLWxhbmRzY2Fw/ZS12aWV3XzE4MTYy/NC0xOTE1Mi5qcGc_/c2VtdD1haXNfaHli/cmlkJnc9NzQwJnE9/ODA" alt="Kashmiri landscape or architecture" className="w-full h-80 object-cover" />
                 </div>
               </div>
 
@@ -676,6 +791,8 @@ export default function App() {
 
         {view === 'privacy' && <LegalPage type="privacy" />}
         {view === 'terms' && <LegalPage type="terms" />}
+        {view === 'shipping' && <LegalPage type="shipping" />}
+        {view === 'return' && <LegalPage type="return" />}
       </main>
 
       {/* FOOTER */}
@@ -706,8 +823,8 @@ export default function App() {
             <ul className="space-y-3 text-sm">
               <li className="hover:text-amber-500 cursor-pointer" onClick={() => setView('privacy')}>Privacy Policy</li>
               <li className="hover:text-amber-500 cursor-pointer" onClick={() => setView('terms')}>Terms of Service</li>
-              <li className="hover:text-amber-500 cursor-pointer">Shipping Policy</li>
-              <li className="hover:text-amber-500 cursor-pointer">Return Policy</li>
+              <li className="hover:text-amber-500 cursor-pointer" onClick={() => setView('shipping')}>Shipping Policy</li>
+              <li className="hover:text-amber-500 cursor-pointer" onClick={() => setView('return')}>Return Policy</li>
             </ul>
           </div>
 
@@ -715,7 +832,8 @@ export default function App() {
             <h3 className="text-white font-bold mb-6">Contact</h3>
             <ul className="space-y-4 text-sm">
               <li className="flex items-start gap-3"><MapPin size={18} className="text-amber-600 mt-1 flex-shrink-0" /><span>Main Bazaar, Residency Road,<br/>Srinagar, Jammu & Kashmir<br/>Pin: 190001</span></li>
-              <li className="flex items-start gap-3"><Phone size={18} className="text-amber-600 mt-1 flex-shrink-0" /><span>+91 194 245 1234</span></li>
+              <li className="flex items-start gap-3"><Phone size={18} className="text-amber-600 mt-1 flex-shrink-0" /><span>+91 79797472200</span></li>
+              <li className="flex items-start gap-3"><Phone size={18} className="text-amber-600 mt-1 flex-shrink-0" /><span>+91 7006425508</span></li>
               <li className="flex items-start gap-3"><Mail size={18} className="text-amber-600 mt-1 flex-shrink-0" /><span>hello@vadiekashmir.com</span></li>
             </ul>
 
