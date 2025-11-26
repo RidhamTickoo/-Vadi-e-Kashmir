@@ -1,6 +1,6 @@
 // src/components/BlogDetail.jsx
 import React, { useState, useEffect } from 'react';
-import { Helmet } from 'react-helmet-async';
+import { Helmet } from 'react-helmet';
 import { ArrowLeft, Calendar, User, Eye, Share2, Facebook, Twitter, Heart } from 'lucide-react';
 import blogService from '../services/blogService';
 

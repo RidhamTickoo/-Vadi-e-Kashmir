@@ -1,6 +1,6 @@
 // src/components/BlogList.jsx
 import React, { useState, useEffect } from 'react';
-import { Helmet } from 'react-helmet-async';
+import { Helmet } from 'react-helmet';
 import { Calendar, User, Eye, ArrowRight, Search } from 'lucide-react';
 import blogService from '../services/blogService';
 

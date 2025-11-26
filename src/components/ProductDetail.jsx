@@ -1,6 +1,6 @@
 // src/components/ProductDetail.jsx
 import React, { useState, useEffect } from 'react';
-import { Helmet } from 'react-helmet-async';
+import { Helmet } from 'react-helmet';
 import { Star, ShoppingCart, Heart, Share2, Truck, ShieldCheck, ArrowLeft, Plus, Minus, Check, X, Facebook, Twitter, Mail, Link as LinkIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import productService from '../services/productService';
