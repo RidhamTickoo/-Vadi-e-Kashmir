@@ -2,13 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Package, ShoppingCart, FileText, Users, TrendingUp, Plus, Edit, Trash2, 
-  Upload, X, CheckCircle, AlertCircle, Search, Filter, Eye, Mail, Phone, Calendar
+  Upload, X, CheckCircle, AlertCircle, Search, Filter, Eye, Mail, Phone, Calendar, Send
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import productService from '../services/productService';
 import categoryService from '../services/categoryService';
 import orderService from '../services/orderService';
 import blogService from '../services/blogService';
+import emailService from '../services/emailService';
+import settingsService from '../services/settingsService';
 import { databases, DATABASE_ID, COLLECTION_IDS } from '../config/appwrite';
 
 const AdminDashboard = ({ user, onClose }) => {
@@ -24,6 +26,81 @@ const AdminDashboard = ({ user, onClose }) => {
   const [showBlogForm, setShowBlogForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [editingBlog, setEditingBlog] = useState(null);
+  const [acceptingOrders, setAcceptingOrders] = useState(false);
+  const [showTestEmailModal, setShowTestEmailModal] = useState(false);
+  const [testEmailRecipient, setTestEmailRecipient] = useState('');
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+
+  // Load order accepting status from database
+  useEffect(() => {
+    loadAcceptingOrdersStatus();
+  }, []);
+
+  const loadAcceptingOrdersStatus = async () => {
+    const result = await settingsService.getAcceptingOrders();
+    if (result.success) {
+      setAcceptingOrders(result.acceptingOrders);
+    }
+  };
+
+  // Save order accepting status to database
+  const toggleOrderAccepting = async () => {
+    const newStatus = !acceptingOrders;
+    setAcceptingOrders(newStatus); // Optimistic update
+    
+    const result = await settingsService.setAcceptingOrders(newStatus);
+    if (result.success) {
+      toast.success(newStatus ? 'Orders are now ENABLED' : 'Orders are now DISABLED');
+    } else {
+      // Revert on failure
+      setAcceptingOrders(!newStatus);
+      toast.error('Failed to update order status');
+    }
+  };
+
+  // Send test email
+  const handleSendTestEmail = async () => {
+    if (!testEmailRecipient || !testEmailRecipient.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setSendingTestEmail(true);
+    try {
+      const result = await emailService.sendOrderConfirmation({
+        email: testEmailRecipient,
+        orderNumber: 'TEST-' + Date.now(),
+        customerName: 'Test Customer',
+        items: [
+          { productName: 'Test Product 1', quantity: 2, price: 500 },
+          { productName: 'Test Product 2', quantity: 1, price: 1000 }
+        ],
+        subtotal: 2000,
+        gst: 360,
+        total: 2360,
+        paymentMethod: 'cod',
+        shippingAddress: {
+          address1: '123 Test Street',
+          city: 'Srinagar',
+          state: 'Jammu & Kashmir',
+          pincode: '190001'
+        },
+        phone: '+91 9797472200'
+      });
+
+      if (result.success) {
+        toast.success('Test email sent successfully!');
+        setShowTestEmailModal(false);
+        setTestEmailRecipient('');
+      } else {
+        toast.error('Failed to send test email: ' + (result.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Test email error:', error);
+      toast.error('Failed to send test email');
+    }
+    setSendingTestEmail(false);
+  };
 
   useEffect(() => {
     loadAllData();
@@ -66,21 +143,41 @@ const AdminDashboard = ({ user, onClose }) => {
       <div className="max-w-7xl mx-auto p-4 md:p-8">
         <div className="bg-white rounded-lg shadow-lg">
           {/* Header */}
-          <div className="border-b border-stone-200 p-6 flex items-center justify-between">
+          <div className="border-b border-stone-200 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-stone-800">Admin Dashboard</h1>
               <p className="text-stone-600 text-sm mt-1">Welcome back, {user?.name || user?.email || 'Admin'}!</p>
             </div>
-            <button
-              onClick={() => {
-                toast.info('📧 Email feature coming soon! Stay tuned!');
-              }}
-              className="px-4 py-2 bg-gray-400 text-white rounded-lg cursor-not-allowed flex items-center gap-2 text-sm"
-              title="Coming Soon"
-            >
-              <Mail className="w-4 h-4" />
-              Email (Coming Soon)
-            </button>
+            
+            <div className="flex items-center gap-4">
+              {/* Order Accepting Toggle */}
+              <div className="flex items-center gap-3 bg-stone-100 px-4 py-2 rounded-lg">
+                <span className="text-sm font-medium text-stone-700">Accept Orders:</span>
+                <button
+                  onClick={toggleOrderAccepting}
+                  className={`relative w-12 h-6 rounded-full transition-all duration-300 ${
+                    acceptingOrders ? 'bg-green-500' : 'bg-stone-300'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${
+                      acceptingOrders ? 'translate-x-6' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+                <span className={`min-w-[32px] text-sm font-bold ${acceptingOrders ? 'text-green-600' : 'text-stone-500'}`}>
+                  {acceptingOrders ? 'ON' : 'OFF'}
+                </span>
+              </div>
+
+              <button
+                onClick={() => setShowTestEmailModal(true)}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg flex items-center gap-2 text-sm transition-colors"
+              >
+                <Send className="w-4 h-4" />
+                Test Email
+              </button>
+            </div>
           </div>
 
           {/* Tabs */}
@@ -128,6 +225,72 @@ const AdminDashboard = ({ user, onClose }) => {
           </div>
         </div>
       </div>
+
+      {/* Test Email Modal */}
+      {showTestEmailModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-stone-800">Send Test Email</h3>
+              <button
+                onClick={() => {
+                  setShowTestEmailModal(false);
+                  setTestEmailRecipient('');
+                }}
+                className="text-stone-400 hover:text-stone-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <p className="text-stone-600 text-sm mb-4">
+              Send a test order confirmation email to verify your email setup is working correctly.
+            </p>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-stone-700 mb-2">
+                Recipient Email Address
+              </label>
+              <input
+                type="email"
+                value={testEmailRecipient}
+                onChange={(e) => setTestEmailRecipient(e.target.value)}
+                placeholder="Enter email address"
+                className="w-full px-4 py-3 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowTestEmailModal(false);
+                  setTestEmailRecipient('');
+                }}
+                className="flex-1 px-4 py-3 bg-stone-100 text-stone-700 rounded-lg hover:bg-stone-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendTestEmail}
+                disabled={sendingTestEmail}
+                className="flex-1 px-4 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {sendingTestEmail ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    Send Test Email
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -847,9 +1010,23 @@ const OrdersTab = ({ orders, onRefresh }) => {
   const [emailOrder, setEmailOrder] = useState(null);
 
   const handleUpdateStatus = async (orderId, newStatus) => {
+    const order = orders.find(o => o.$id === orderId);
     const result = await orderService.updateOrderStatus(orderId, newStatus);
     if (result.success) {
       toast.success('Order status updated!');
+      
+      // Send status update email (don't block the flow)
+      if (order && order.email) {
+        emailService.sendStatusUpdate({
+          email: order.email,
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+          status: newStatus
+        }).catch(err => {
+          console.error('Status email failed:', err);
+        });
+      }
+      
       onRefresh();
     }
   };

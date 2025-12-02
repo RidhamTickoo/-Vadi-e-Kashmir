@@ -27,6 +27,8 @@ import TermsOfService from './components/TermsOfService';
 import ShippingPolicy from './components/ShippingPolicy';
 import ReturnPolicy from './components/ReturnPolicy';
 import CheckoutModal from './components/CheckoutModal';
+import ThankYou from './components/ThankYou';
+import MyOrders from './components/MyOrders';
 
 /* --------------------------
    Small UI Components
@@ -709,6 +711,7 @@ export default function App() {
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [lastOrderData, setLastOrderData] = useState(null);
 
   // Load user session and data on mount
   useEffect(() => {
@@ -968,6 +971,11 @@ export default function App() {
             <button onClick={() => navigateTo('track')} className={`text-stone-700 hover:text-amber-700 font-medium transition-colors ${view === 'track' ? 'text-amber-700' : ''}`}>
               Track Order
             </button>
+            {user && (
+              <button onClick={() => navigateTo('my-orders')} className={`text-stone-700 hover:text-amber-700 font-medium transition-colors ${view === 'my-orders' ? 'text-amber-700' : ''}`}>
+                My Orders
+              </button>
+            )}
             <button onClick={() => navigateTo('about')} className={`text-stone-700 hover:text-amber-700 font-medium transition-colors ${view === 'about' ? 'text-amber-700' : ''}`}>
               About
             </button>
@@ -1035,9 +1043,9 @@ export default function App() {
             </button>
 
             {user ? (
-              <div className="relative group">
+              <div className="relative group hidden md:block">
                 <button className="flex items-center gap-2 px-4 py-2 bg-amber-700 text-white rounded-lg hover:bg-amber-800 transition-colors">
-                  <span className="hidden md:inline">{user.name || user.email || user.phone || 'Account'}</span>
+                  <span>{user.name || user.email || user.phone || 'Account'}</span>
                   <ChevronRight size={16} className="rotate-90" />
                 </button>
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-stone-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
@@ -1066,6 +1074,58 @@ export default function App() {
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden bg-white border-t border-stone-200 py-4">
+            {/* Mobile Search Bar */}
+            <div className="px-4 mb-4">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setShowSearchResults(e.target.value.length > 0);
+                  }}
+                  className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:outline-none focus:border-amber-500"
+                />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+              </div>
+              {/* Mobile Search Results */}
+              {showSearchResults && searchQuery && (
+                <div className="absolute left-4 right-4 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-50">
+                  {products.filter(p => 
+                    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    p.description?.toLowerCase().includes(searchQuery.toLowerCase())
+                  ).slice(0, 5).map(product => (
+                    <div
+                      key={product.$id}
+                      onClick={() => {
+                        window.location.hash = `#product-${product.$id}`;
+                        setSearchQuery('');
+                        setShowSearchResults(false);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="flex items-center gap-3 p-3 hover:bg-stone-50 cursor-pointer border-b last:border-0"
+                    >
+                      <img 
+                        src={product.images?.[0] || '/placeholder.jpg'} 
+                        alt={product.name}
+                        className="w-10 h-10 object-cover rounded"
+                      />
+                      <div>
+                        <p className="font-medium text-stone-800 text-sm">{product.name}</p>
+                        <p className="text-amber-600 text-sm">₹{product.price?.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {products.filter(p => 
+                    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    p.description?.toLowerCase().includes(searchQuery.toLowerCase())
+                  ).length === 0 && (
+                    <p className="p-3 text-stone-500 text-sm">No products found</p>
+                  )}
+                </div>
+              )}
+            </div>
             <nav className="flex flex-col gap-4 px-4">
               <button onClick={() => navigateTo('home')} className="text-left text-stone-700 hover:text-amber-700 font-medium">
                 Home
@@ -1079,10 +1139,36 @@ export default function App() {
               <button onClick={() => navigateTo('track')} className="text-left text-stone-700 hover:text-amber-700 font-medium">
                 Track Order
               </button>
+              {user && (
+                <button onClick={() => navigateTo('my-orders')} className="text-left text-stone-700 hover:text-amber-700 font-medium">
+                  My Orders
+                </button>
+              )}
               <button onClick={() => navigateTo('about')} className="text-left text-stone-700 hover:text-amber-700 font-medium">
                 Our Story
               </button>
-              {!user && (
+              
+              {/* Divider */}
+              <div className="h-px bg-stone-200 my-2"></div>
+              
+              {/* Phone Number */}
+              <a href="tel:+919797472200" className="flex items-center gap-2 text-amber-700 font-bold">
+                <Phone size={18} />
+                +91 9797472200
+              </a>
+              
+              {/* Login/Logout */}
+              {user ? (
+                <button 
+                  onClick={() => {
+                    handleLogout();
+                    setIsMobileMenuOpen(false);
+                  }} 
+                  className="text-left text-red-600 font-medium"
+                >
+                  Logout
+                </button>
+              ) : (
                 <button onClick={() => navigateTo('login')} className="text-left text-amber-700 font-bold">
                   Login
                 </button>
@@ -1501,6 +1587,10 @@ const SectionTitle = ({ title, subtitle }) => (
         {view === 'terms-of-service' && <TermsOfService />}
         {view === 'shipping-policy' && <ShippingPolicy />}
         {view === 'return-policy' && <ReturnPolicy />}
+
+        {/* ORDER PAGES */}
+        {view === 'thank-you' && <ThankYou orderData={lastOrderData} />}
+        {view === 'my-orders' && <MyOrders user={user} />}
       </main>
 
       {/* Footer */}
@@ -1607,6 +1697,11 @@ const SectionTitle = ({ title, subtitle }) => (
           user={user}
           onClose={() => setShowCheckoutModal(false)}
           onSuccess={() => {
+            setCart([]);
+            localStorage.removeItem('vk_cart');
+          }}
+          onOrderComplete={(orderData) => {
+            setLastOrderData(orderData);
             setCart([]);
             localStorage.removeItem('vk_cart');
           }}
