@@ -21,7 +21,8 @@ export const COLLECTION_IDS = {
   BLOGS: process.env.REACT_APP_COLLECTION_BLOGS,
   REVIEWS: process.env.REACT_APP_COLLECTION_REVIEWS,
   ADMINS: process.env.REACT_APP_COLLECTION_ADMINS,
-  CART: process.env.REACT_APP_COLLECTION_CART
+  CART: process.env.REACT_APP_COLLECTION_CART,
+  SETTINGS: process.env.REACT_APP_COLLECTION_SETTINGS || 'settings'
 };
 
 // Storage Bucket IDs

@@ -1,10 +1,13 @@
 // src/components/CheckoutModal.jsx
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, CreditCard, Banknote } from 'lucide-react';
 import toast from 'react-hot-toast';
 import orderService from '../services/orderService';
+import paymentService from '../services/paymentService';
+import emailService from '../services/emailService';
+import settingsService from '../services/settingsService';
 
-const CheckoutModal = ({ cart, onClose, onSuccess, user }) => {
+const CheckoutModal = ({ cart, onClose, onSuccess, user, onOrderComplete }) => {
   const [checkoutForm, setCheckoutForm] = useState({
     firstName: '',
     lastName: '',
@@ -18,9 +21,24 @@ const CheckoutModal = ({ cart, onClose, onSuccess, user }) => {
   });
   const [placingOrder, setPlacingOrder] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('razorpay'); // 'razorpay' or 'cod'
+  const [acceptingOrders, setAcceptingOrders] = useState(true); // Default to true, fetch from DB
+  const [loadingSettings, setLoadingSettings] = useState(true);
+
+  // Fetch accepting orders status from database
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const result = await settingsService.getAcceptingOrders();
+      if (result.success) {
+        setAcceptingOrders(result.acceptingOrders);
+      }
+      setLoadingSettings(false);
+    };
+    fetchSettings();
+  }, []);
 
   // Check if user is logged in on mount
-  React.useEffect(() => {
+  useEffect(() => {
     if (!user) {
       setShowLoginPrompt(true);
     }
@@ -28,7 +46,8 @@ const CheckoutModal = ({ cart, onClose, onSuccess, user }) => {
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const gst = Math.round(subtotal * 0.05);
-  const total = subtotal + gst;
+  const codFee = paymentMethod === 'cod' ? 50 : 0;
+  const total = subtotal + gst + codFee;
 
   const handleFormChange = (field, value) => {
     setCheckoutForm(prev => ({
@@ -90,41 +109,90 @@ const CheckoutModal = ({ cart, onClose, onSuccess, user }) => {
         },
         subtotal: subtotal,
         gst: gst,
+        codFee: codFee,
         total: total,
-        paymentMethod: 'cod',
+        paymentMethod: paymentMethod,
+        paymentStatus: paymentMethod === 'cod' ? 'pending' : 'pending',
         userId: user?.$id || user?.id || 'guest',
         createdAt: new Date().toISOString()
       };
 
-      const result = await orderService.createOrder(orderData);
+      if (paymentMethod === 'razorpay') {
+        // Initiate Razorpay payment
+        const result = await paymentService.initiateRazorpayPayment({
+          amount: total,
+          orderNumber: `VK${Date.now()}`,
+          customerName: orderData.customerName,
+          customerEmail: orderData.email,
+          customerPhone: orderData.phone,
+          shippingAddress: `${checkoutForm.address1}, ${checkoutForm.city}, ${checkoutForm.state} - ${checkoutForm.pincode}`,
+          onSuccess: async (paymentResponse) => {
+            // Payment successful - create order
+            const createResult = await orderService.createOrder({
+              ...orderData,
+              paymentStatus: 'paid',
+              razorpayPaymentId: paymentResponse.razorpay_payment_id
+            });
 
-      if (result.success) {
-        // Send order confirmation email
-        await orderService.sendOrderConfirmationEmail({
-          ...orderData,
-          orderNumber: result.order.orderNumber
+            if (createResult.success) {
+              toast.success('Payment successful! Order placed.');
+              
+              // Send emails (don't block the flow)
+              emailService.sendNewOrderEmails(createResult.order).catch(err => {
+                console.error('Email sending failed:', err);
+              });
+              
+              if (onOrderComplete) {
+                onOrderComplete(createResult.order);
+              }
+              if (onSuccess) {
+                onSuccess();
+              }
+              onClose();
+              window.location.hash = '#thank-you';
+            } else {
+              toast.error('Payment received but order creation failed. Contact support.');
+            }
+            setPlacingOrder(false);
+          },
+          onDismiss: () => {
+            toast.error('Payment cancelled');
+            setPlacingOrder(false);
+          }
         });
 
-        toast.success(`Order placed successfully! 🎉\nOrder ID: ${result.order.orderNumber}\nConfirmation email sent to ${checkoutForm.email}`);
-        
-        if (onSuccess) {
-          onSuccess();
+        if (!result.success) {
+          toast.error(result.error || 'Failed to initiate payment');
+          setPlacingOrder(false);
         }
-        
-        onClose();
-        
-        // Navigate to home
-        setTimeout(() => {
-          window.location.hash = '#home';
-        }, 2000);
       } else {
-        console.error('Order creation failed:', result.error);
-        toast.error(`Failed to place order: ${result.error || 'Please try again.'}`);
+        // COD - Create order directly
+        const result = await orderService.createOrder(orderData);
+
+        if (result.success) {
+          toast.success(`Order placed successfully! Order ID: ${result.order.orderNumber}`);
+          
+          // Send emails (don't block the flow)
+          emailService.sendNewOrderEmails(result.order).catch(err => {
+            console.error('Email sending failed:', err);
+          });
+          
+          if (onOrderComplete) {
+            onOrderComplete(result.order);
+          }
+          if (onSuccess) {
+            onSuccess();
+          }
+          onClose();
+          window.location.hash = '#thank-you';
+        } else {
+          toast.error(`Failed to place order: ${result.error || 'Please try again.'}`);
+        }
+        setPlacingOrder(false);
       }
     } catch (error) {
       console.error('Order placement error:', error);
       toast.error('An error occurred while placing the order');
-    } finally {
       setPlacingOrder(false);
     }
   };
@@ -343,21 +411,65 @@ const CheckoutModal = ({ cart, onClose, onSuccess, user }) => {
               <div className="mb-6">
                 <h3 className="font-bold text-lg text-stone-800 mb-4">Payment Method</h3>
                 <div className="space-y-3">
-                  <label className="flex items-center gap-3 p-4 border-2 border-stone-200 rounded-lg cursor-pointer hover:border-amber-500 transition-colors">
-                    <input type="radio" name="payment" className="w-4 h-4 text-amber-600" defaultChecked />
-                    <div>
-                      <p className="font-medium text-stone-800">Cash on Delivery</p>
-                      <p className="text-sm text-stone-600">Pay when you receive the product</p>
-                    </div>
-                  </label>
+                  {acceptingOrders ? (
+                    <>
+                      <label 
+                        className={`flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-colors ${paymentMethod === 'razorpay' ? 'border-amber-500 bg-amber-50' : 'border-stone-200 hover:border-amber-500'}`}
+                        onClick={() => setPaymentMethod('razorpay')}
+                      >
+                        <input 
+                          type="radio" 
+                          name="payment" 
+                          checked={paymentMethod === 'razorpay'} 
+                          onChange={() => setPaymentMethod('razorpay')}
+                          className="w-4 h-4 text-amber-600" 
+                        />
+                        <CreditCard className="w-5 h-5 text-amber-600" />
+                        <div>
+                          <p className="font-medium text-stone-800">Pay Online</p>
+                          <p className="text-sm text-stone-600">UPI, Cards, Net Banking, Wallets</p>
+                        </div>
+                      </label>
 
-                  <label className="flex items-center gap-3 p-4 border-2 border-stone-200 rounded-lg cursor-pointer hover:border-amber-500 transition-colors opacity-50">
-                    <input type="radio" name="payment" className="w-4 h-4 text-amber-600" disabled />
-                    <div>
-                      <p className="font-medium text-stone-800">Online Payment</p>
-                      <p className="text-sm text-stone-600">UPI, Cards, Net Banking (Coming Soon)</p>
-                    </div>
-                  </label>
+                      <label 
+                        className={`flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-colors ${paymentMethod === 'cod' ? 'border-amber-500 bg-amber-50' : 'border-stone-200 hover:border-amber-500'}`}
+                        onClick={() => setPaymentMethod('cod')}
+                      >
+                        <input 
+                          type="radio" 
+                          name="payment" 
+                          checked={paymentMethod === 'cod'} 
+                          onChange={() => setPaymentMethod('cod')}
+                          className="w-4 h-4 text-amber-600" 
+                        />
+                        <Banknote className="w-5 h-5 text-green-600" />
+                        <div>
+                          <p className="font-medium text-stone-800">Cash on Delivery</p>
+                          <p className="text-sm text-stone-600">Pay when you receive (+₹50 COD fee)</p>
+                        </div>
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <label className="flex items-center gap-3 p-4 border-2 rounded-lg cursor-not-allowed transition-colors border-stone-200 opacity-50">
+                        <input type="radio" name="payment" disabled className="w-4 h-4 text-amber-600" />
+                        <CreditCard className="w-5 h-5 text-stone-400" />
+                        <div>
+                          <p className="font-medium text-stone-500">Pay Online</p>
+                          <p className="text-sm text-stone-400">Currently unavailable</p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-center gap-3 p-4 border-2 rounded-lg cursor-not-allowed transition-colors border-stone-200 opacity-50">
+                        <input type="radio" name="payment" disabled className="w-4 h-4 text-amber-600" />
+                        <Banknote className="w-5 h-5 text-stone-400" />
+                        <div>
+                          <p className="font-medium text-stone-500">Cash on Delivery</p>
+                          <p className="text-sm text-stone-400">Currently unavailable</p>
+                        </div>
+                      </label>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -399,6 +511,12 @@ const CheckoutModal = ({ cart, onClose, onSuccess, user }) => {
                     <span>GST (5%)</span>
                     <span>₹{gst.toLocaleString()}</span>
                   </div>
+                  {paymentMethod === 'cod' && (
+                    <div className="flex justify-between text-stone-600">
+                      <span>COD Fee</span>
+                      <span>₹{codFee.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="h-px bg-stone-300 my-3"></div>
                   <div className="flex justify-between font-bold text-xl text-stone-800">
                     <span>Total</span>
@@ -407,24 +525,41 @@ const CheckoutModal = ({ cart, onClose, onSuccess, user }) => {
                 </div>
 
                 {/* Place Order Button */}
-                <button
-                  onClick={handlePlaceOrder}
-                  disabled={placingOrder}
-                  className="w-full bg-amber-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {placingOrder ? (
-                    <>
-                      <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      Placing Order...
-                    </>
-                  ) : (
-                    `Place Order - ₹${total.toLocaleString()}`
-                  )}
-                </button>
-                
-                <p className="text-xs text-stone-500 text-center mt-3">
-                  By placing this order, you agree to our Terms of Service
-                </p>
+                {acceptingOrders ? (
+                  <>
+                    <button
+                      onClick={handlePlaceOrder}
+                      disabled={placingOrder}
+                      className="w-full bg-amber-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {placingOrder ? (
+                        <>
+                          <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          Processing...
+                        </>
+                      ) : paymentMethod === 'razorpay' ? (
+                        `Pay ₹${total.toLocaleString()}`
+                      ) : (
+                        `Place COD Order - ₹${total.toLocaleString()}`
+                      )}
+                    </button>
+                    <p className="text-xs text-stone-500 text-center mt-3">
+                      By placing this order, you agree to our Terms of Service
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      disabled={true}
+                      className="w-full bg-stone-400 text-white py-4 rounded-xl font-bold text-lg cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      Currently Not Accepting Orders
+                    </button>
+                    <p className="text-xs text-red-500 text-center mt-3 font-medium">
+                      We are temporarily not accepting orders. Please check back later.
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </div>
